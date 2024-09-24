@@ -158,4 +158,4 @@ def load_and_transform_video(
     return {'pixel_values': video_outputs}
 
 if __name__ == '__main__':
-    load_and_transform_video(r"D:\ONE-PEACE-main\lb_test\zHSOYcZblvY.mp4")
+    load_and_transform_video(r"/home/ef0036/Temp/sign-segmentation/demo/sample_data/ARRANGE.mp4")
