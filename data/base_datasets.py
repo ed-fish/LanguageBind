@@ -34,7 +34,7 @@ class VAT_dataset(Dataset):
         self.total_text = ['raw', 'mplug', 'polish_mplug', 'sound_mplug'] + [f'ofa{i}' for i in range(8)]
         self.weight = [0.2, 0.2, 0.2, 0.2] + [0.2 / 8] * 8
         self.title = self.text_type == 'raw'
-        self.data_root = '/apdcephfs_cq3/share_1311970/A_Youtube'
+        self.data_root = ''
         if args.clip_type != 'al':
             with open(args.train_data, 'r') as f:
                 self.id2title_folder_caps = json.load(f)
@@ -88,8 +88,9 @@ class VAT_dataset(Dataset):
 
     def get_video(self, id, folder):
         # video_path = opj(self.data_root, folder, f'{id}.mp4')
-        resize_folder = 'new_download_resize256_skip15' if folder.startswith('new_') else f'{folder}_resize256_skip15'
-        video_path = opj(self.data_root, resize_folder, f'{id}.mp4')
+        video_path = id
+        # resize_folder = 'new_download_resize256_skip15' if folder.startswith('new_') else f'{folder}_resize256_skip15'
+        # video_path = opj(self.data_root, resize_folder, f'{id}.mp4')
         video = load_and_transform_video(video_path, self.video_transform,
                                          video_decode_backend=self.video_decode_backend, num_frames=self.num_frames)
         return video

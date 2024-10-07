@@ -1,0 +1,2 @@
+Total number of training samples: 49016
+Total number of validation samples: 6637

@@ -1,0 +1,42 @@
+#!/bin/bash
+CACHE_DIR="/home/ef0036/Projects/LanguageBind/cache_dir/models--LanguageBind--LanguageBind_Video_FT"
+source /home/ef0036/miniconda3/bin/activate langbind
+torchrun --nnodes=1 --nproc_per_node=1 -m main \
+    --train-data "data/all_data/annotations_train.json" \
+    --train-num-samples 29695 \
+    --clip-type "vl" \
+    --add-time-attn \
+    --max-depth 10 \
+    --do_train \
+    --lock-text \
+    --lock-image \
+    --text-type "mplug" \
+    --init-temp 0.07 \
+    --learn-temp \
+    --model "ViT-L-14" \
+    --cache-dir "${CACHE_DIR}" \
+    --convert_to_lora \
+    --lora_r 2 \
+    --lr 0.0005 \
+    --coef-lr 1e-3 \
+    --beta1 0.9 \
+    --beta2 0.98 \
+    --wd 0.2 \
+    --eps 1e-6 \
+    --num-frames 8 \
+    --force-patch-dropout 0.2 \
+    --epochs 20 \
+    --batch-size 8 \
+    --accum-freq 4 \
+    --warmup 2000 \
+    --precision "amp" \
+    --workers 10 \
+    --video-decode-backend "decord" \
+    --save-frequency 1 \
+    --log-every-n-steps 20 \
+    --report-to "wandb" \
+    --resume "latest" \
+    --wandb-project-name "sign-bind" \
+    --name "cache_FT_video" \
+    --do_eval \
+    --val_vl_ret_data "signbank"

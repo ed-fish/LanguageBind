@@ -1,5 +1,5 @@
 
-CACHE_DIR="path/to/pretrained/weight"
+CACHE_DIR="/home/ef0036/Projects/LanguageBind/logs/debug-signbind-bsl-isolated"
 RESUME="video_language.pt"
 ANNOTATION="path/to/data"
 # this script is for 640 total batch_size (n(16) GPUs * batch_size(10) * accum_freq(4))

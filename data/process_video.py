@@ -109,7 +109,7 @@ def get_video_transform(args):
 def load_and_transform_video(
     video_path,
     transform,
-    video_decode_backend='opencv',
+    video_decode_backend='decord',
     clip_start_sec=0.0,
     clip_end_sec=None,
     num_frames=8,
@@ -158,4 +158,15 @@ def load_and_transform_video(
     return {'pixel_values': video_outputs}
 
 if __name__ == '__main__':
-    load_and_transform_video(r"/home/ef0036/Temp/sign-segmentation/demo/sample_data/ARRANGE.mp4")
+    transform = Compose(
+        [
+            # UniformTemporalSubsample(num_frames),
+            Lambda(lambda x: x / 255.0),
+            NormalizeVideo(mean=OPENAI_DATASET_MEAN, std=OPENAI_DATASET_STD),
+            ShortSideScale(size=224),
+            RandomCropVideo(size=224),
+            RandomHorizontalFlipVideo(p=0.5),
+        ]
+    )
+
+    print(load_and_transform_video(r"/vol/research/SignFeaturePool/signbank/videos/EXCITED.mp4", transform)['pixel_values'].shape)

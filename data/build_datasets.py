@@ -59,8 +59,8 @@ def get_VAT_dataset(args):
 
 def get_data(args, epoch=0):
     data = {}
-
     if args.do_train:
+        print(args.train_data)
         if args.train_data.endswith(".json"):
             data[f"{args.clip_type}_pt"] = get_VAT_dataset(args)
         elif args.train_data.endswith(".tar"):
@@ -71,24 +71,27 @@ def get_data(args, epoch=0):
     if args.do_eval:
         temp_batch_size = args.batch_size
         args.batch_size = 8 if args.val_vl_ret_data else 16
-        data_root = "/apdcephfs_cq3/share_1311970/downstream_datasets/VideoTextRetrieval/vtRetdata"
+        data_root = "/vol/research/SignFeaturePool"
         if args.val_vl_ret_data:
             data["vl_ret"] = []
             for val_vl_ret_data in args.val_vl_ret_data:
-                if val_vl_ret_data == "msrvtt":
-                    args.train_csv = os.path.join(f'{data_root}/MSRVTT/MSRVTT_train.9k.csv')
-                    args.val_csv = os.path.join(f'{data_root}/MSRVTT/MSRVTT_JSFUSION_test.csv')
-                    args.data_path = os.path.join(f'{data_root}/MSRVTT/MSRVTT_data.json')
-                    args.features_path = os.path.join(f'{data_root}/MSRVTT/MSRVTT_Videos')
-                elif val_vl_ret_data == "msvd":
-                    args.data_path = os.path.join(f'{data_root}/MSVD')
-                    args.features_path = os.path.join(f'{data_root}/MSVD/MSVD_Videos')
-                elif val_vl_ret_data == "activity":
-                    args.data_path = os.path.join(f'{data_root}/ActivityNet')
-                    args.features_path = os.path.join(f'{data_root}/ActivityNet/Videos/Activity_Videos')
-                elif val_vl_ret_data == "didemo":
-                    args.data_path = os.path.join(f'{data_root}/Didemo')
-                    args.features_path = os.path.join(f'{data_root}/Didemo/videos')
+                # if val_vl_ret_data == "msrvtt":
+                #     args.train_csv = os.path.join(f'{data_root}/MSRVTT/MSRVTT_train.9k.csv')
+                #     args.val_csv = os.path.join(f'{data_root}/MSRVTT/MSRVTT_JSFUSION_test.csv')
+                #     args.data_path = os.path.join(f'{data_root}/MSRVTT/MSRVTT_data.json')
+                #     args.features_path = os.path.join(f'{data_root}/MSRVTT/MSRVTT_Videos')
+                # elif val_vl_ret_data == "msvd":
+                #     args.data_path = os.path.join(f'{data_root}/MSVD')
+                #     args.features_path = os.path.join(f'{data_root}/MSVD/MSVD_Videos')
+                # elif val_vl_ret_data == "activity":
+                #     args.data_path = os.path.join(f'{data_root}/ActivityNet')
+                #     args.features_path = os.path.join(f'{data_root}/ActivityNet/Videos/Activity_Videos')
+                # elif val_vl_ret_data == "didemo":
+                #     args.data_path = os.path.join(f'{data_root}/Didemo')
+                #     args.features_path = os.path.join(f'{data_root}/Didemo/videos')
+                if val_vl_ret_data == "signbank":
+                    args.data_path = os.path.join(f'{data_root}/signbank')
+                    args.features_path = os.path.join(f'{data_root}/signbank/videos')
                 else:
                     raise NameError
 
@@ -98,6 +101,7 @@ def get_data(args, epoch=0):
                 args.slice_framepos = 2   # "0: cut from head frames; 1: cut from tail frames; 2: extract frames uniformly."
 
                 from vl_ret.data_dataloaders import DATALOADER_DICT
+                
 
                 tokenizer = get_tokenizer(HF_HUB_PREFIX + args.model, cache_dir=args.cache_dir)
                 test_dataloader, test_length = None, 0
@@ -105,7 +109,7 @@ def get_data(args, epoch=0):
                     test_dataloader, test_length = DATALOADER_DICT[val_vl_ret_data]["test"](args, tokenizer)
 
                 if DATALOADER_DICT[val_vl_ret_data]["val"] is not None:
-                    val_dataloader, val_length = DATALOADER_DICT[val_vl_ret_data]["val"](args, tokenizer, subset="val")
+                    val_dataloader, val_length = DATALOADER_DICT[val_vl_ret_data]["val"](args, tokenizer)
                 else:
                     val_dataloader, val_length = test_dataloader, test_length
                 ## report validation results if the ["test"] is None
