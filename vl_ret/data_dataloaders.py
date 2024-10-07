@@ -1,14 +1,15 @@
 import argparse
 import torch
 from torch.utils.data import DataLoader
-
 from data.build_datasets import get_data
+
 from .dataloader_msrvtt_retrieval import MSRVTT_DataLoader
 from .dataloader_msrvtt_retrieval import MSRVTT_TrainDataLoader
 from .dataloader_msvd_retrieval import MSVD_DataLoader
 from .dataloader_lsmdc_retrieval import LSMDC_DataLoader
 from .dataloader_activitynet_retrieval import ActivityNet_DataLoader
 from .dataloader_didemo_retrieval import DiDeMo_DataLoader
+from .dataloader_signbank import Signbank_DataLoader
 
 def dataloader_msrvtt_train(args, tokenizer):
     msrvtt_dataset = MSRVTT_TrainDataLoader(
@@ -250,12 +251,40 @@ def dataloader_didemo_test(args, tokenizer, subset="test"):
     return dataloader_didemo, len(didemo_testset)
 
 
+def dataloader_signbank_test(args, tokenizer, subset="val"):
+    signbank_dataset = Signbank_DataLoader(
+        annotation_path="LanguageBind/data/signbank/annotation.json",
+        subset=subset,
+        data_path=args.data_path,
+        features_path=args.features_path,
+        max_words=args.max_words,
+        feature_framerate=args.feature_framerate,
+        tokenizer=tokenizer,
+        max_frames=args.num_frames,
+    )
+# 
+    # test_sampler = torch.utils.data.distributed.DistributedSampler(signbank_dataset)
+    dataloader = DataLoader(
+        signbank_dataset,
+        batch_size=args.batch_size_val,
+        num_workers=args.num_thread_reader,
+        pin_memory=False,
+        # shuffle=(test_sampler is None),
+        # sampler=test_sampler,
+        shuffle=False,
+        drop_last=False,
+    )
+
+    return dataloader, len(signbank_dataset)
+
+
 DATALOADER_DICT = {}
 DATALOADER_DICT["msrvtt"] = {"train":dataloader_msrvtt_train, "val":dataloader_msrvtt_test, "test":None}
 DATALOADER_DICT["msvd"] = {"train":dataloader_msvd_train, "val":dataloader_msvd_test, "test":dataloader_msvd_test}
 DATALOADER_DICT["lsmdc"] = {"train":dataloader_lsmdc_train, "val":dataloader_lsmdc_test, "test":dataloader_lsmdc_test}
 DATALOADER_DICT["activity"] = {"train":dataloader_activity_train, "val":dataloader_activity_test, "test":None}
 DATALOADER_DICT["didemo"] = {"train":dataloader_didemo_train, "val":dataloader_didemo_test, "test":dataloader_didemo_test}
+DATALOADER_DICT["signbank"] = {"train":None, "val":dataloader_signbank_test, "test":dataloader_signbank_test}
 
 
 if __name__ == '__main__':
@@ -282,16 +311,16 @@ if __name__ == '__main__':
     parser.add_argument('--num_frames', type=int, default=8, help='')
     args = parser.parse_args()
 
-    args.val_vl_ret_data = 'msrvtt'
+    args.val_vl_ret_data = 'signbank'
     args.do_train = False
     args.do_eval = True
     args.slice_framepos = 2
     args.max_words = 77
-    args.train_csv = 'D:/MSRVTT/MSRVTT_train.9k.csv'
-    args.val_csv = 'D:/MSRVTT/MSRVTT_JSFUSION_test.csv'
-    args.data_path = 'D:/MSRVTT/MSRVTT_data.json'
-    args.features_path = 'D:/MSRVTT/videos/all'
+    # args.train_csv = 'D:/MSRVTT/MSRVTT_train.9k.csv'
+    # args.val_csv = 'D:/MSRVTT/MSRVTT_JSFUSION_test.csv'
+    args.data_path = '/vol/research/SignFeaturePool/signbank'
+    args.features_path = '/vol/research/SignFeaturePool/signbank/videos'
 
     dataloader_msrvtt = get_data(args)["vl_ret"]
     for batch in dataloader_msrvtt:
-        print()
+        print(batch)

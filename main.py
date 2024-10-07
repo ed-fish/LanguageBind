@@ -53,11 +53,8 @@ LATEST_CHECKPOINT_NAME = "epoch_latest.pt"
 MODEL_DICT = {"ViT-L-14": "laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K",
               "ViT-H-14": "laion/CLIP-ViT-H-14-laion2B-s32B-b79K"}
 CHECKPOINT_DICT = {"ViT-L-14": "models--laion--CLIP-ViT-L-14-DataComp.XL-s13B-b90K/snapshots/84c9828e63dc9a9351d1fe637c346d4c1c4db341/pytorch_model.bin",
-                   "ViT-H-14": "models--laion--CLIP-ViT-H-14-laion2B-s32B-b79K/snapshots/94a64189c3535c1cb44acfcccd7b0908c1c8eb23/pytorch_model.bin"}
-
-
-
-
+                   "ViT-H-14": "models--laion--CLIP-ViT-H-14-laion2B-s32B-b79K/snapshots/94a64189c3535c1cb44acfcccd7b0908c1c8eb23/pytorch_model.bin",
+                   "VIT-VL-14": "models--LanguageBind--LanguageBind_Video_FT/snapshots/13f52c20ce666a7d017bcd00522039f4ab034a66/pytorch_model.bin"}
 
 
 def random_seed(seed=42, rank=0):
@@ -459,7 +456,7 @@ def main(args):
             if not args.distributed and next(iter(sd.items()))[0].startswith('module'):
                 sd = {k[len('module.'):]: v for k, v in sd.items()}
             miss, unexpect = model.load_state_dict(sd, strict=False)
-            # print(miss, unexpect)
+            print(miss, unexpect)
             assert unexpect == [] or unexpect == ['text_model.embeddings.position_ids'] or unexpect == ['module.text_model.embeddings.position_ids']
             if unexpect == ['text_model.embeddings.position_ids'] or unexpect == ['module.text_model.embeddings.position_ids']:
                 logging.warning(f"Unexpected key: {unexpect}")
@@ -507,26 +504,26 @@ def main(args):
         assert tensorboard is not None, "Please install tensorboard."
         writer = tensorboard.SummaryWriter(args.tensorboard_path)
 
-    # if args.wandb and is_master(args):
-    #     assert wandb is not None, 'Please install wandb.'
-    #     logging.debug('Starting wandb.')
-    #     args.train_sz = data["train"].dataloader.num_samples
-    #     if args.val_data is not None:
-    #         args.val_sz = data["val"].dataloader.num_samples
-    #     # you will have to configure this for your project!
-    #     wandb.init(
-    #         project=args.wandb_project_name,
-    #         name=args.name,
-    #         id=args.name,
-    #         notes=args.wandb_notes,
-    #         tags=[],
-    #         resume='auto' if args.resume == "latest" else None,
-    #         config=vars(args),
-    #     )
-    #     if args.debug:
-    #         wandb.watch(model, log='all')
-    #     wandb.save(params_file)
-    #     logging.debug('Finished loading wandb.')
+    if args.wandb and is_master(args):
+        assert wandb is not None, 'Please install wandb.'
+        logging.debug('Starting wandb.')
+        # args.train_sz = data["train"].dataloader.num_samples
+        # if args.val_data is not None:
+        #     args.val_sz = data["val"].dataloader.num_samples
+        # you will have to configure this for your project!
+        wandb.init(
+            project=args.wandb_project_name,
+            name=args.name,
+            id=args.name,
+            notes=args.wandb_notes,
+            tags=[],
+            resume='auto' if args.resume == "latest" else None,
+            config=vars(args),
+        )
+        if args.debug:
+            wandb.watch(model, log='all')
+        wandb.save(params_file)
+        logging.debug('Finished loading wandb.')
 
     if args.torchcompile:
         logging.info('Compiling model...')
