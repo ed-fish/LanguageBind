@@ -71,7 +71,7 @@ def get_data(args, epoch=0):
     if args.do_eval:
         temp_batch_size = args.batch_size
         args.batch_size = 8 if args.val_vl_ret_data else 16
-        data_root = "/vol/research/SignFeaturePool"
+        data_root = "/mnt/fast/nobackup/scratch4weeks/ef0036/"
         if args.val_vl_ret_data:
             data["vl_ret"] = []
             for val_vl_ret_data in args.val_vl_ret_data:
@@ -92,6 +92,10 @@ def get_data(args, epoch=0):
                 if val_vl_ret_data == "signbank":
                     args.data_path = os.path.join(f'{data_root}/signbank')
                     args.features_path = os.path.join(f'{data_root}/signbank/videos')
+
+                elif val_vl_ret_data == "bsl_dict":
+                    args.data_path = os.path.join(data_root, 'bsldict')
+                    args.features_path = os.path.join(data_root, 'bsldict/videos_original')
                 else:
                     raise NameError
 

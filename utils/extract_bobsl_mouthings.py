@@ -1,96 +1,96 @@
 import os
-import pickle
-import cv2  # OpenCV library for video processing
+import csv
+import subprocess
+import json
 
-# Load the pickle file
-pickle_file = '/vol/vssp/datasets/mixedmode/BOBSL/bobsl-v1-release/annotations/bobsl_mouthing_c2281_verified_mouthing_9263_dict_15782.pkl'  # Update if necessary
-with open(pickle_file, 'rb') as f:
-    y = pickle.load(f)
+# Base path to the directory containing the videos
+video_base_dir = '../MASKED_VIDEOS/'  # Adjust this if needed
+# Output directory where the extracted segments will be saved
+output_dir = './extracted_segments/'
+# Output path for the JSON file
+json_output_file = './dataset.json'
 
-# Define the path where your videos are stored
-video_directory = '/vol/vssp/datasets/mixedmode/BOBSL/bobsl-v1-release/MASKED_VIDEOS_BIGGEST'  # Update if necessary
+# Ensure the output directory exists
+os.makedirs(output_dir, exist_ok=True)
 
-# Define the output directory where clips will be saved
-output_directory = '/mnt/4tb/data/bobslmouth_mask'  # Update if necessary
-os.makedirs(output_directory, exist_ok=True)
+# Path to the CSV file
+csv_file = 'your_csv_file.csv'  # Update this with the actual path
 
-# Extract data from the pickle file
-video_names = y["videos"]["name"]            # List of video file names
-words = y["videos"]["word"]                  # Corresponding words mouthed
-mouthing_times = y["videos"]["mouthing_time"]  # Corresponding mouthing times
+# Dictionary to store JSON data
+json_data = {}
 
-# Iterate over each video
-for idx, video_name in enumerate(video_names):
-    # Extract data from the sample
-    video_id = video_name.split(".")[0]  # Remove the file extension
-    word = words[idx]
-    mouthing_time = mouthing_times[idx]
+# Function to get the frame rate using ffprobe
+def get_frame_rate(video_file):
+    ffprobe_command = [
+        'ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=r_frame_rate', '-of', 'default=noprint_wrappers=1:nokey=1', video_file
+    ]
+    try:
+        result = subprocess.run(ffprobe_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
+        frame_rate_str = result.stdout.strip()
+        # Frame rate can be a fraction, e.g., "25/1", so we need to evaluate it
+        if '/' in frame_rate_str:
+            numerator, denominator = map(int, frame_rate_str.split('/'))
+            frame_rate = numerator / denominator
+        else:
+            frame_rate = float(frame_rate_str)
+        return frame_rate
+    except subprocess.CalledProcessError as e:
+        print(f"Error retrieving frame rate for {video_file}: {e}")
+        return None
 
-    if mouthing_time is None:
-        print(f"Sample {video_name} missing mouthing_time. Skipping.")
-        continue
+# Function to extract a video segment using ffmpeg (using frame numbers converted to seconds)
+def extract_segment(video_file, start_frame, stop_frame, output_file, frame_rate):
+    start_time = start_frame / frame_rate  # Convert frames to seconds
+    stop_time = stop_frame / frame_rate    # Convert frames to seconds
+    ffmpeg_command = [
+        'ffmpeg', '-i', video_file, '-ss', str(start_time), '-to', str(stop_time), '-c', 'copy', output_file
+    ]
+    subprocess.run(ffmpeg_command, check=True)
 
-    # Construct the full path to the video file
-    video_filename = f"{video_id}.masked.mp4"  # Adjust extension if necessary
-    video_path = os.path.join(video_directory, video_filename)
+# Read the CSV file
+with open(csv_file, newline='', encoding='utf-8') as csvfile:
+    reader = csv.DictReader(csvfile, delimiter='|')
+    for row in reader:
+        speaker = row['camera'].lower()  # 'a' or 'b' based on the camera field in lowercase
+        filename = row['filename']  # The long number
+        directory = filename.split('-')[0]  # Get the base directory name (everything before '-')
+        
+        # Construct the path to the video file
+        video_path = os.path.join(video_base_dir, directory, f"{filename}_1{speaker}1.masked.mp4")
 
-    if not os.path.exists(video_path):
-        print(f"Video file {video_path} not found. Skipping.")
-        continue
+        if os.path.exists(video_path):
+            # Retrieve the frame rate for the video
+            frame_rate = get_frame_rate(video_path)
+            if frame_rate is None:
+                print(f"Skipping {video_path} due to frame rate retrieval issue.")
+                continue
 
-    # Load the video using OpenCV
-    cap = cv2.VideoCapture(video_path)
+            # Extract start and stop frames
+            start_frame = int(row['start_time'])  # Use frame numbers directly
+            stop_frame = int(row['stop_time'])    # Use frame numbers directly
 
-    if not cap.isOpened():
-        print(f"Failed to open video {video_path}. Skipping.")
-        continue
+            # Create output file path
+            output_file = os.path.join(output_dir, f"{row['filename']}_segment_{speaker}.mp4")
 
-    # Get video properties
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    if fps == 0:
-        print(f"FPS is zero for video {video_path}. Skipping.")
-        cap.release()
-        continue
-    total_frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
-    duration = total_frames / fps
+            # Extract the segment
+            extract_segment(video_path, start_frame, stop_frame, output_file, frame_rate)
+            print(f"Extracted: {output_file}")
+            
+            # Prepare JSON entry
+            json_data[output_file] = {
+                "folder": output_dir,
+                "mplug": row['ger_text'],          # Use 'ger_text' for 'mplug'
+                "gloss": row['gloss'],             # Add gloss information
+                "ofa": f"A video of a BSL interpreter signing: {row['ger_text']}",
+                "sound_mplug": "",
+                "raw": "",
+                "split": "val"
+            }
+        else:
+            print(f"Video file {video_path} not found.")
 
-    # Calculate start and end times for the clip (2 seconds total)
-    clip_duration = 0.6  # seconds
-    half_clip = clip_duration / 2.0
+# Write the JSON data to a file
+with open(json_output_file, 'w', encoding='utf-8') as json_file:
+    json.dump(json_data, json_file, indent=4, ensure_ascii=False)
 
-    start_time = max(0, mouthing_time - half_clip)
-    end_time = min(duration, mouthing_time + half_clip)
-
-    # Convert times to frame numbers
-    start_frame = int(start_time * fps)
-    end_frame = int(end_time * fps)
-
-    # Set the video position to the start frame
-    cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
-
-    # Prepare the output video writer
-    output_filename = f"{video_id}_{word}.mp4"  # Include word for clarity
-    output_path = os.path.join(output_directory, output_filename)
-
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # Codec (adjust if necessary)
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
-
-    # Read and write frames from start_frame to end_frame
-    current_frame = start_frame
-
-    while current_frame <= end_frame:
-        ret, frame = cap.read()
-        if not ret:
-            print(f"End of video reached unexpectedly at frame {current_frame}.")
-            break
-        out.write(frame)
-        current_frame += 1
-
-    # Release resources
-    cap.release()
-    out.release()
-
-    print(f"Extracted clip saved to {output_path}")
+print(f"JSON file created: {json_output_file}")

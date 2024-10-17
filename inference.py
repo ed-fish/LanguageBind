@@ -6,25 +6,41 @@ if __name__ == '__main__':
     device = torch.device(device)
     clip_type = {
         'video': 'LanguageBind_Video_FT',  # also LanguageBind_Video
-        'audio': 'LanguageBind_Audio_FT',  # also LanguageBind_Audio
-        'thermal': 'LanguageBind_Thermal',
-        'image': 'LanguageBind_Image',
-        'depth': 'LanguageBind_Depth',
     }
 
     model = LanguageBind(clip_type=clip_type, cache_dir='./cache_dir')
+    # Extract the model's state_dict
+    
+    # Check before loading checkpoint
+    print("Before:", model.modality_proj.video.weight)
+
+    # Load checkpoint
+
+    # Check after loading checkpoint
+    
+    checkpoint = torch.load("/mnt/fast/nobackup/users/ef0036/LanguageBind/logs/bs128_a100_acc_10/checkpoints/epoch_1.pt")
+    model_state_dict = checkpoint['state_dict']
+
+# Load the state_dict into the model
+    model.load_state_dict(model_state_dict, strict=True)
+    
+    
+    print("After:", model.modality_proj.video.weight)
+
+    
     model = model.to(device)
     model.eval()
-    pretrained_ckpt = f'LanguageBind/LanguageBind_Image'
+    pretrained_ckpt = f'LanguageBind/LanguageBind_Video_FT'
+   
     tokenizer = LanguageBindImageTokenizer.from_pretrained(pretrained_ckpt, cache_dir='./cache_dir/tokenizer_cache_dir')
     modality_transform = {c: transform_dict[c](model.modality_config[c]) for c in clip_type.keys()}
 
 #     image = ['assets/image/0.jpg', 'assets/image/1.jpg']
 #     audio = ['assets/audio/0.wav', 'assets/audio/1.wav']
-    video = ['/vol/research/SignFeaturePool/signbank/videos/ROME.mp4', '/vol/research/SignFeaturePool/signbank/videos/HOTEL.mp4']
+    video = ['/mnt/fast/nobackup/scratch4weeks/ef0036/signbank/videos/ROME.mp4', '/mnt/fast/nobackup/scratch4weeks/ef0036/signbank/videos/HOTEL.mp4', '/mnt/fast/nobackup/scratch4weeks/ef0036/signbank/videos/DONKEY.mp4', '/mnt/fast/nobackup/scratch4weeks/ef0036/signbank/videos/SCHOOL.mp4']
 #     depth = ['assets/depth/0.png', 'assets/depth/1.png']
 #     thermal = ['assets/thermal/0.jpg', 'assets/thermal/1.jpg']
-    language = ["HOTEL", 'ROME']
+    language = ["hotel", 'rome', 'donkey', 'school']
 
     inputs = {
       #   'image': to_device(modality_transform['image'](image), device),

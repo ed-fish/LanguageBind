@@ -49,6 +49,8 @@ def create_vat_model(args):
         except Exception as e:
             if is_master(args):
                 logging.info(f"Failed loading pretrained model with {e}")
+                print(args.pretrained)
+                exit()
     else:
         if is_master(args):
             logging.info(f"No pretrained model to load in \'{args.pretrained}\'")

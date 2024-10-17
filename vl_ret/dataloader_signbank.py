@@ -51,7 +51,7 @@ class Signbank_DataLoader(Dataset):
         # Get list of video IDs based on the subset
         self.video_id_list = [
             vid for vid, data in self.annotation_data.items() if data['split'] == self.subset
-        ][:100]
+        ][:264]
 
         # Build video paths and prepare the video dictionary
         # MAYBE THIS NEEDS TO BE FEATURE PATH
@@ -98,7 +98,7 @@ class Signbank_DataLoader(Dataset):
         # token_type_ids = tokenized.get('token_type_ids', torch.zeros_like(input_ids))
 
         # Return the tensors. Ensure they are in the shape the model expects.
-        return input_ids, input_mask, segment_ids
+        return input_ids, input_mask, segment_ids, caption
     
     def _get_rawvideo(self, video_id):
         video_mask = np.zeros((1, self.max_frames), dtype=np.int64)
@@ -109,7 +109,7 @@ class Signbank_DataLoader(Dataset):
         )
         video_path = self.video_dict[video_id]
         try:
-            # Read the entire video
+            # Read the entire video]
             raw_video_data = self.rawVideoExtractor.get_video_data(video_path)
             raw_video_data = raw_video_data['video']
 
@@ -149,10 +149,10 @@ class Signbank_DataLoader(Dataset):
     def __getitem__(self, index):
         video_id = self.idx2video_id[index]
 
-        pairs_text, pairs_mask, pairs_segment = self._get_text(video_id)
+        pairs_text, pairs_mask, pairs_segment, video_name = self._get_text(video_id)
         video, video_mask = self._get_rawvideo(video_id)
 
-        return pairs_text, pairs_mask, pairs_segment, video, video_mask
+        return pairs_text, pairs_mask, pairs_segment, video, video_mask, video_name
 
 
 # class Signbank_DataLoader(Dataset):
