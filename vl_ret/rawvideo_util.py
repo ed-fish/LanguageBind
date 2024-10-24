@@ -115,6 +115,7 @@ class RawVideoExtractorCV2():
         return {'video': video_data}
 
     def get_video_data(self, video_path, start_time=None, end_time=None):
+        print(video_path)
         image_input = self.video_to_tensor(video_path, self.transform, sample_fp=self.framerate, start_time=start_time, end_time=end_time)
         return image_input
 

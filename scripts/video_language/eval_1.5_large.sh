@@ -19,7 +19,7 @@ TORCH_DISTRIBUTED_DEBUG=DETAIL HF_DATASETS_OFFLINE=1 TRANSFORMERS_OFFLINE=1 torc
     --precision "amp" --workers 10 --video-decode-backend "decord" \
     --save-frequency 1 --log-every-n-steps 20 --report-to "wandb" \
     --wandb-project-name "sign-bind" \
-    --name "a100_bsl_dict_264_unseen_text_align_check_basic_mplug" \
-    --resume "/mnt/fast/nobackup/scratch4weeks/ef0036/epoch_49.pt" \
+    --name "a100_bsl_dict_264_test_w_mdgs_datai" \
+    --resume "/mnt/fast/nobackup/users/ef0036/LanguageBind/logs/bs128_a100_text_freeze_semantic_accumulate_50_w_mdgs/checkpoints/epoch_81.pt" \
     --do_eval \
     --val_vl_ret_data "bsl_dict" 
