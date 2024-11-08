@@ -96,6 +96,10 @@ def get_data(args, epoch=0):
                 elif val_vl_ret_data == "bsl_dict":
                     args.data_path = os.path.join(data_root, 'bsldict')
                     args.features_path = os.path.join(data_root, 'bsldict/videos_original')
+                    
+                elif val_vl_ret_data == "extract_feats":
+                    args.data_path = os.path.join(data_root, 'phoenix')
+                    args.features_path = os.path.join(data_root, 'phoenix/videos_original')
                 else:
                     raise NameError
 
