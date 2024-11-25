@@ -1,5 +1,5 @@
 import json
-
+from torch.utils.tensorboard import SummaryWriter
 import torch
 import numpy as np
 import random
@@ -44,6 +44,10 @@ def _run_on_single_gpu(model,
 
 def evaluate_vl_ret(model, data, epoch, args, tb_writer=None):
     input_dtype = get_input_dtype(args.precision)
+    
+
+# Initialize TensorBoard writer
+    tb_writer = SummaryWriter(log_dir='runs/test_umap')
     if is_master(args) and (args.val_frequency and ((epoch % args.val_frequency) == 0 or epoch == args.epochs)):
         # print(data)
         val_vl_ret_data = list(data.keys())
@@ -84,13 +88,14 @@ def evaluate_vl_ret(model, data, epoch, args, tb_writer=None):
             # batch_list_v = []
             batch_sequence_output_list, batch_visual_output_list = [], []
             total_video_num = 0
+            metadata_list = []
 
             # ----------------------------
             # 1. cache the features
             # ----------------------------
             for bid, batch in enumerate(test_dataloader):
                 # batch = tuple(t.to(device) for t in batch)
-                input_ids, attention_mask, _, video, _ = batch
+                input_ids, attention_mask, _, video, _, names = batch
                 # print(input_ids.shape, video.shape, video.dtype, end='-----')
                 input_ids = input_ids.squeeze().to(device)
                 attention_mask = attention_mask.squeeze().to(device)
@@ -135,6 +140,9 @@ def evaluate_vl_ret(model, data, epoch, args, tb_writer=None):
                     # batch_list_t.append((input_mask, segment_ids,))
 
                     batch_visual_output_list.append(visual_output)
+                    
+                    for name in names:
+                        metadata_list.append(name)
                     # batch_list_v.append((video_mask,))
 
                 print(f"Process {val_vl_ret_data.upper()}: {bid}/{len(test_dataloader)}\r", end='')
@@ -203,6 +211,14 @@ def evaluate_vl_ret(model, data, epoch, args, tb_writer=None):
         logging.info(f"{val_vl_ret_data.upper()} Video-to-Text:")
         logging.info('\t>>>  V2T$R@1: {:.1f} - V2T$R@5: {:.1f} - V2T$R@10: {:.1f} - V2T$Median R: {:.1f} - V2T$Mean R: {:.1f}'.
                     format(vt_metrics['R1'], vt_metrics['R5'], vt_metrics['R10'], vt_metrics['MR'], vt_metrics['MeanR']))
+        
+        all_text_features = torch.cat(batch_sequence_output_list).cpu().numpy()
+        all_visual_features = torch.cat(batch_visual_output_list).cpu().numpy()
+        
+        tb_writer.add_embedding(all_visual_features,
+            metadata=metadata_list,
+            tag=f"Text-Visual Embeddings at epoch {epoch}"
+        )
 
 
         if args.save_logs:

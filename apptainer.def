@@ -1,0 +1,40 @@
+BootStrap: docker
+From: pytorch/pytorch:2.1.1-cuda12.1-cudnn8-runtime
+
+%files
+    /home/ef0036/Projects/LanguageBind/environment.yml /LanguageBind/environment.yml  # Copy the entire LanguageBind repo into the container
+
+%post
+    export DEBIAN_FRONTEND=noninteractive
+
+    # Install required system packages
+    apt-get update && apt-get install -y libgl1 libglib2.0-0 python3.10
+
+    # Update conda and install the environment from the environment.yml file inside LanguageBind
+    conda update -y conda
+    conda env create --file /LanguageBind/environment.yml
+
+    # Fix the pytorchvideo package by editing the relevant files
+    sed -i 's/import torchvision.transforms.functional_tensor as F_t/import torchvision.transforms.functional as F_t/g' /opt/conda/envs/langbind/lib/python3.10/site-packages/pytorchvideo/transforms/augmentations.py
+    sed -i 's/import torchvision.transforms.functional_tensor as F_t/import torchvision.transforms.functional as F_t/g' /opt/conda/envs/langbind/lib/python3.10/site-packages/pytorchvideo/transforms/augmix.py
+
+    # Ensure the environment is activated automatically
+    echo "conda activate langbind" >> ~/.bashrc
+    echo "source /opt/conda/etc/profile.d/conda.sh" >> ~/.bashrc
+
+    # Clean up
+    apt-get clean
+
+%environment
+    export LC_ALL=C.UTF-8
+    export LANG=C.UTF-8
+
+    # Source the Conda init script and activate the environment
+    source /opt/conda/etc/profile.d/conda.sh
+    conda activate langbind
+
+%runscript
+    # Ensure the conda environment is activated when running the container
+    source /opt/conda/etc/profile.d/conda.sh
+    conda activate langbind
+    exec "$@"

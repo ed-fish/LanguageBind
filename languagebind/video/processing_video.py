@@ -48,7 +48,7 @@ def get_video_transform(config):
                 NormalizeVideo(mean=OPENAI_DATASET_MEAN, std=OPENAI_DATASET_STD),
                 ShortSideScale(size=224),
                 CenterCropVideo(224),
-                RandomHorizontalFlipVideo(p=0.5),
+                # RandomHorizontalFlipVideo(p=0.5),
             ]
         )
 

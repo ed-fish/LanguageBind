@@ -270,6 +270,7 @@ def main(args):
 
     model = create_vat_model(args)
     args.image_size = model.vision_model.config.image_size
+
     #############################################################################
 
 
@@ -396,7 +397,6 @@ def main(args):
 
     no_decay_lora_params = [[n, p] for n, p in named_parameters if no_decay(n, p) and lora(n, p) and p.requires_grad]
     decay_lora_params = [[n, p] for n, p in named_parameters if decay(n, p) and lora(n, p) and p.requires_grad]
-
 
     param_groups = []
     if no_decay_non_lora_params: param_groups.append({"params": [p for n, p in no_decay_non_lora_params], "weight_decay": 0., 'lr': args.lr * args.coef_lr})

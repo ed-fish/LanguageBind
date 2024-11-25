@@ -17,10 +17,6 @@ from open_clip import get_tokenizer
 from open_clip.factory import HF_HUB_PREFIX
 
 
-
-
-
-
 class LanguageBind(nn.Module):
     def __init__(self, args, no_temp=False):
         super(LanguageBind, self).__init__()
