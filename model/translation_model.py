@@ -20,13 +20,13 @@ class VideoTranslationModel(PreTrainedModel):
             )
         else:
             self.encoder_projection = nn.Identity()
-
         # Scaling factor for embeddings (optional)
         self.embed_scale = math.sqrt(self.mbart_model.config.d_model)
 
     def forward(self, pixel_values, labels=None, decoder_input_ids=None, decoder_attention_mask=None):
         # Obtain encoder outputs from the CLIP model
-        encoder_hidden_states = self.clip_model.encode_image(pixel_values)
+        with torch.no_grad():
+            encoder_hidden_states = self.clip_model.encode_image(pixel_values)
         # encoder_hidden_states shape: (batch_size, seq_len, hidden_size)
 
         # Project encoder outputs to match MBart's hidden size
@@ -38,6 +38,7 @@ class VideoTranslationModel(PreTrainedModel):
         encoder_attention_mask = torch.ones(
             encoder_hidden_states.size()[:-1], dtype=torch.long, device=encoder_hidden_states.device
         )
+        print(encoder_hidden_states.shape)
 
         # Prepare encoder outputs
         encoder_outputs = BaseModelOutput(last_hidden_state=encoder_hidden_states)

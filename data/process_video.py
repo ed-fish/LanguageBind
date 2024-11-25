@@ -113,6 +113,7 @@ def load_and_transform_video(
     clip_start_sec=0.0,
     clip_end_sec=None,
     num_frames=8,
+    start_frame=None,
 ):
     if video_decode_backend == 'pytorchvideo':
         #  decord pyav
@@ -126,10 +127,25 @@ def load_and_transform_video(
     elif video_decode_backend == 'decord':
         decord_vr = VideoReader(video_path, ctx=cpu(0))
         duration = len(decord_vr)
-        frame_id_list = np.linspace(0, duration-1, num_frames, dtype=int)
-        video_data = decord_vr.get_batch(frame_id_list)
-        video_data = video_data.permute(3, 0, 1, 2)  # (T, H, W, C) -> (C, T, H, W)
-        video_outputs = transform(video_data)
+        total_frames = len(decord_vr)
+        if start_frame is None:
+            frame_id_list = np.linspace(0, duration-1, num_frames, dtype=int)
+            video_data = decord_vr.get_batch(frame_id_list)
+            video_data = video_data.permute(3, 0, 1, 2)  # (T, H, W, C) -> (C, T, H, W)
+            video_outputs = transform(video_data)
+        else:
+            end_frame = start_frame + num_frames
+            indices = list(range(start_frame, min(end_frame, total_frames)))
+
+            # Handle case where there are not enough frames
+            if len(indices) < num_frames:
+                indices += [indices[-1]] * (num_frames - len(indices))
+
+            video_data = decord_vr.get_batch(indices)  # Shape: (num_frames, H, W, C)
+            video_data = video_data.permute(3, 0, 1, 2)  # Shape: (num_frames, C, H, W)
+            # Apply transform
+            video_outputs = transform(video_data)  # Apply the same transform to all frames
+            
 
     elif video_decode_backend == 'opencv':
         cv2_vr = cv2.VideoCapture(video_path)

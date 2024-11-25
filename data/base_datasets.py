@@ -1,29 +1,14 @@
-import contextlib
-import io
-import json
-import logging
-import os.path
+import os
 import random
-import re
-import time
-
-import pandas as pd
-
-from a_cls.dataloader import make_midname_dict
+import logging
+import torch
+from torch.utils.data import Dataset
 from open_clip import get_tokenizer
 from open_clip.factory import HF_HUB_PREFIX
 from .process_video import load_and_transform_video, get_video_transform
-from .process_audio import load_and_transform_audio, get_audio_transform
 from .process_text import load_and_transform_text
-from .process_depth import load_and_transform_depth, get_depth_transform
-from .process_thermal import load_and_transform_thermal, get_thermal_transform
-
-import argparse
-from os.path import join as opj
-from torch.utils.data import Dataset, DataLoader
-from tqdm import tqdm
-
-
+import json
+import decord
 
 class VAT_dataset(Dataset):
     def __init__(self, args):
@@ -31,131 +16,51 @@ class VAT_dataset(Dataset):
         self.video_decode_backend = args.video_decode_backend
         self.num_frames = args.num_frames
         self.text_type = args.text_type
+        self.train_data = args.train_data
+        self.train_num_samples = args.train_num_samples
+        self.model = args.model
+        self.cache_dir = args.cache_dir
         self.total_text = ['raw', 'mplug', 'polish_mplug', 'sound_mplug'] + [f'ofa{i}' for i in range(8)]
         self.weight = [0.2, 0.2, 0.2, 0.2] + [0.2 / 8] * 8
         self.title = self.text_type == 'raw'
         self.data_root = ''
         if args.clip_type != 'al':
-            with open(args.train_data, 'r') as f:
+            with open(self.train_data, 'r') as f:
                 self.id2title_folder_caps = json.load(f)
-            self.ids = list(self.id2title_folder_caps.keys())[:args.train_num_samples]
+            self.ids = list(self.id2title_folder_caps.keys())[:self.train_num_samples]
         else:
             self.id2path_cap, self.ids = get_audio_anno()
 
         self.clip_type = args.clip_type
 
-        self.num_mel_bins = args.num_mel_bins
-        self.target_length = args.target_length
-        self.audio_sample_rate = args.audio_sample_rate
-        self.audio_mean = args.audio_mean
-        self.audio_std = args.audio_std
-
-        # self.audio_error_file = open('./audio_error_id.txt', 'w')
-
-        self.tokenizer = get_tokenizer(HF_HUB_PREFIX + args.model, cache_dir=args.cache_dir)
+        self.tokenizer = get_tokenizer(HF_HUB_PREFIX + self.model, cache_dir=self.cache_dir)
         self.video_transform = get_video_transform(args)
-        self.audio_transform = get_audio_transform(args)
-        self.depth_transform = get_depth_transform(args)
-        self.thermal_transform = get_thermal_transform(args)
 
     def __len__(self):
         return len(self.ids)
-        # return self.id2title_folder_caps.shape[0]
-
 
     def __getitem__(self, idx):
         try:
-            if self.clip_type == 'al':
-                matched_modality, input_ids, attention_mask = self.get_audio_text(idx)
-                return matched_modality, input_ids, attention_mask
-            else:
-                id = self.ids[idx]
-                folder = self.id2title_folder_caps[id]['folder']
-                text_output, ofa_number = self.get_text(id)
-                input_ids, attention_mask = text_output['input_ids'], text_output['attention_mask']
-                if self.clip_type == 'vl' or self.clip_type == 'vl_new':
-                    matched_modality = self.get_video(id, folder)
-                # elif self.clip_type == 'al':
-                #     matched_modality = self.get_audio(id, folder)
-                elif self.clip_type == 'dl':
-                    matched_modality = self.get_depth(id, folder, ofa_number)
-                elif self.clip_type == 'tl':
-                    matched_modality = self.get_thermal(id, folder, ofa_number)
-                return matched_modality['pixel_values'], input_ids, attention_mask
+            id = self.ids[idx]
+            folder = self.id2title_folder_caps[id]['folder']
+            text_output, ofa_number = self.get_text(id)
+            input_ids, attention_mask = text_output['input_ids'], text_output['attention_mask']
+            video_data = self.get_video(id, folder)
+            return video_data['pixel_values'], input_ids, attention_mask
         except Exception as error_msg:
             logging.info(f"Failed at {idx} with \"{error_msg}\"")
             return self.__getitem__(random.randint(0, self.__len__()-1))
 
-    def get_video(self, id, folder):
-        # video_path = opj(self.data_root, folder, f'{id}.mp4')
+    def get_video(self, id, folder, start_frame=None, num_frames=None):
         video_path = id
-        # resize_folder = 'new_download_resize256_skip15' if folder.startswith('new_') else f'{folder}_resize256_skip15'
-        # video_path = opj(self.data_root, resize_folder, f'{id}.mp4')
-        video = load_and_transform_video(video_path, self.video_transform,
-                                         video_decode_backend=self.video_decode_backend, num_frames=self.num_frames)
+        video = load_and_transform_video(
+            video_path, 
+            self.video_transform,
+            video_decode_backend=self.video_decode_backend,
+            num_frames=num_frames if num_frames is not None else self.num_frames,
+            start_frame=start_frame
+        )
         return video
-
-    def get_audio_text(self, idx):
-
-        path_cap = self.id2path_cap[self.ids[idx]]
-        audio_path = path_cap['path']
-        audio_data = load_and_transform_audio(audio_path, self.audio_transform)
-
-        caption = path_cap['caption']
-        if isinstance(caption, list):
-            if isinstance(caption[0], str) and len(caption) > 1:
-                caption = random.choice(caption)
-            else:
-                caption = caption[0]
-
-        input_ids, attention_mask = self.tokenizer(caption)
-
-        return audio_data, input_ids.squeeze(), attention_mask.squeeze()
-
-        # def get_audio(self, idx):
-        '''
-        audio_path = opj(self.data_root, folder, f'{id}.mp3')
-        if os.path.exists(audio_path):
-            pass
-        else:
-            audio_path = audio_path[:-4] + '.m4a'
-            if os.path.exists(audio_path):
-                pass
-            else:
-                audio_path = audio_path[:-4] + '.wav'
-                if not os.path.exists(audio_path):
-                    # self.audio_error_file.write(audio_path[:-4] + '\n')
-                    raise FileNotFoundError(f'Not found audio file at \'{audio_path[:-4]}\' with .mp3 .m4a .wav')
-            # AudioSegment.from_file(audio_path).export(audio_path[:-4] + '.mp3', format='mp3')
-            # audio_path = opj(self.data_root, folder, f'{id}.mp3')
-        audio = load_and_transform_audio(audio_path, self.audio_transform)
-        '''
-
-        # audio_path = opj(self.data_root, folder+'_ffmpeg_mp3', f'{id}.mp3')
-        # audio = load_and_transform_audio(audio_path, self.audio_transform)
-
-
-        '''
-        audiocap_id = self.meta['uniq_id'][idx]
-        audio_path = f'/apdcephfs_cq3/share_1311970/downstream_datasets/Audio/audiocaps/audio/train/{audiocap_id}.flac'
-        audio_data = load_and_transform_audio(audio_path, self.audio_transform)
-
-        caption = self.meta['text'][idx]
-        input_ids, attention_mask = self.tokenizer(caption)
-        return audio_data, input_ids.squeeze(), attention_mask.squeeze()
-        '''
-
-        '''
-        path_cap = self.id2path_cap[self.ids[idx]]
-        audio_path = f"/remote-home/freesound/{path_cap['path']}"
-        audio_data = load_and_transform_audio(audio_path, self.audio_transform)
-
-        caption = path_cap['caption']
-        input_ids, attention_mask = self.tokenizer(caption)
-        '''
-
-        # return audio
-
 
     def get_text(self, id):
         if self.text_type != 'mix':
@@ -173,44 +78,64 @@ class VAT_dataset(Dataset):
             text_output = load_and_transform_text(text, self.tokenizer, title=text_type=='raw')
             return text_output, ofa_number
 
-    def get_depth(self, id, folder, ofa_number):
-        depth_folder = opj(self.data_root, folder, f'{id}_depth_f8glpn_folder')
-        random_id = random.randint(0, 7) if ofa_number is None else ofa_number
-        # random_id = 3
-        depth_path = os.path.join(depth_folder, f'{random_id}.png')
-        depth = load_and_transform_depth(depth_path, self.depth_transform)
-        return depth
+    def get_num_frames(self, idx):
+        id = self.ids[idx]
+        video_path = id
+        total_frames = get_video_frame_count(video_path)
+        return total_frames
 
-    def get_thermal(self, id, folder, ofa_number):
-        thermal_folder = opj(self.data_root, folder, f'{id}_thermal_folder')
-        random_id = random.randint(0, 7) if ofa_number is None else ofa_number
-        # random_id = 3
-        thermal_path = os.path.join(thermal_folder, f'{random_id}.jpg')
-        thermal = load_and_transform_thermal(thermal_path, self.thermal_transform)
-        return thermal
+    def get_video_frames(self, idx, start_frame, chunk_size):
+        video_data = self.get_video(
+            id=self.ids[idx],
+            folder=self.id2title_folder_caps[self.ids[idx]]['folder'],
+            start_frame=start_frame,
+            num_frames=chunk_size
+        )
+        return video_data
 
+def get_video_frame_count(video_path):
+    vr = decord.VideoReader(video_path)
+    return len(vr)
 
+class VATBatchedDataset(Dataset):
+    """
+    A dataset that for each video returns all its chunks of frames.
+    Each chunk consists of `chunk_size` frames with a sliding window of `stride` frames.
+    """
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser('Pre-training', add_help=False)
-    parser.add_argument('--num_frames', default=8, type=float, help='')
-    parser.add_argument('--workers', default=10, type=int, help='')
-    args = parser.parse_args()
+    def __init__(self, base_dataset, chunk_size=8, stride=4):
+        """
+        Args:
+            base_dataset (Dataset): The original VAT_dataset instance.
+            chunk_size (int): Number of frames per chunk.
+            stride (int): Number of frames to slide the window for the next chunk.
+        """
+        self.base_dataset = base_dataset
+        self.chunk_size = chunk_size
+        self.stride = stride
+        self.ids = self.base_dataset.ids
 
-    args.cache_dir = 'D:\Omni-modal-hf'
-    args.num_frames = 8
-    args.clip_type = 'vl'
-    args.num_mel_bins = 128
-    args.target_length = 1024
-    args.audio_sample_rate = 16000
-    args.audio_mean = 1
-    args.audio_std = 1
-    args.rank = 0
-    args.batch_size = 16
+    def __len__(self):
+        return len(self.base_dataset)
 
-    train_dataset = VAT_dataset(args)
-    load = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.workers)
+    def __getitem__(self, idx):
+        num_frames = self.base_dataset.get_num_frames(idx)
+        if num_frames < self.chunk_size:
+            # Skip videos with fewer frames
+            return None
 
-    for samples in tqdm((load)):
-        matched_modality, input_ids, attention_mask = samples
-        # print(video.shape, text.shape)
+        num_chunks = 1 + (num_frames - self.chunk_size) // self.stride
+        chunks = []
+        for chunk_idx in range(num_chunks):
+            start_frame = chunk_idx * self.stride
+            video_data = self.base_dataset.get_video_frames(idx, start_frame, self.chunk_size)
+            chunks.append(video_data['pixel_values'])
+        # Stack chunks along a new dimension
+        chunks = torch.stack(chunks, dim=0)  # Shape: [num_chunks, channels, frames, height, width]
+
+        # Get text data
+        id = self.ids[idx]
+        text_output, _ = self.base_dataset.get_text(id)
+        input_ids, attention_mask = text_output['input_ids'], text_output['attention_mask']
+
+        return chunks, input_ids, attention_mask

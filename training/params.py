@@ -105,6 +105,11 @@ def parse_args(args):
     parser.add_argument('--test_num_crop', type=int, default=3)
     parser.add_argument('--sampling_rate', type=int, default=16)
     parser.add_argument('--reprob', type=float, default=0.25, metavar='PCT', help='Random erase prob (default: 0.25)')
+    
+    #####################
+    # Translation
+    
+    parser.add_argument("--use_batched_dataset", default=False, action="store_true")
 
     #######################
     # origin open-clip params
