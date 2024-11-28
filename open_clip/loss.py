@@ -215,6 +215,7 @@ class DistillClipLoss(ClipLoss):
 
         return contrastive_loss, distill_loss
     
+
 class SemanticAwareClipLoss(ClipLoss):
     def __init__(
             self,
@@ -241,18 +242,44 @@ class SemanticAwareClipLoss(ClipLoss):
 
         # Compute logits
         logits_per_image, logits_per_text = self.get_logits(image_features, text_features, logit_scale)
+
         labels = self.get_ground_truth(device, logits_per_image.shape[0])
 
+        # Compute the normal CLIP loss
+        clip_loss = (
+            F.cross_entropy(logits_per_image, labels) +
+            F.cross_entropy(logits_per_text, labels)
+        ) / 2
+
+        # Gather features for computing similarities
+        if self.world_size > 1:
+            all_image_features, all_text_features = gather_features(
+                image_features, text_features,
+                self.local_loss, self.gather_with_grad, self.rank, self.world_size, self.use_horovod)
+
+            if self.local_loss:
+                image_features_for_sim = image_features
+                text_features_for_sim = text_features
+                labels_for_sim = labels
+            else:
+                image_features_for_sim = all_image_features
+                text_features_for_sim = all_text_features
+                labels_for_sim = self.get_ground_truth(device, all_image_features.shape[0])
+        else:
+            image_features_for_sim = image_features
+            text_features_for_sim = text_features
+            labels_for_sim = labels
+
         # Normalize features to unit vectors
-        image_features = image_features / image_features.norm(dim=1, keepdim=True)
-        text_features = text_features / text_features.norm(dim=1, keepdim=True)
+        image_features_norm = image_features_for_sim / image_features_for_sim.norm(dim=1, keepdim=True)
+        text_features_norm = text_features_for_sim / text_features_for_sim.norm(dim=1, keepdim=True)
 
         # Compute visual similarity matrix V
-        V = torch.matmul(image_features, image_features.T)
+        V = torch.matmul(image_features_norm, image_features_norm.T)
         V.fill_diagonal_(0)
 
         # Compute semantic similarity matrix S
-        S = torch.matmul(text_features, text_features.T)
+        S = torch.matmul(text_features_norm, text_features_norm.T)
         S.fill_diagonal_(1)
 
         # Compute semantic dissimilarity matrix D
@@ -267,16 +294,26 @@ class SemanticAwareClipLoss(ClipLoss):
             W = W * self.lambda_param
 
         # Create mask for negative samples
-        labels_expanded = labels.unsqueeze(1)
+        labels_expanded = labels_for_sim.unsqueeze(1)
         negative_mask = (labels_expanded != labels_expanded.T).float()
 
         # Adjust logits
         adjusted_logits_per_image = logits_per_image - W * negative_mask
         adjusted_logits_per_text = logits_per_text - W.T * negative_mask
 
-        # Compute loss
-        loss_i = F.cross_entropy(adjusted_logits_per_image, labels)
-        loss_t = F.cross_entropy(adjusted_logits_per_text, labels)
-        total_loss = (loss_i + loss_t) / 2
+        # Compute the semantic-aware loss
+        semantic_loss_i = F.cross_entropy(adjusted_logits_per_image, labels)
+        semantic_loss_t = F.cross_entropy(adjusted_logits_per_text, labels)
+        semantic_loss = (semantic_loss_i + semantic_loss_t) / 2
 
-        return {"semantic_aware_loss": total_loss} if output_dict else total_loss
+        # Combine the losses
+        total_loss = clip_loss + semantic_loss
+
+        if output_dict:
+            return {
+                "contrastive_loss": clip_loss,
+                "semantic_aware_loss": semantic_loss,
+                "total_loss": total_loss
+            }
+        else:
+            return total_loss 
