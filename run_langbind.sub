@@ -1,0 +1,75 @@
+#!/bin/bash
+#SBATCH --job-name=designbind
+#SBATCH --partition=a100
+#SBATCH --gres=gpu:1
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=15
+#SBATCH --mem=80G
+#SBATCH --time=2-10:00:00
+#SBATCH --output=logs/debug_output-%j.log
+#SBATCH --error=logs/debug_error-%j.log
+
+# Load necessary modules
+module load cuda/12.1
+
+# Set environment variables for torchrun
+export HOST_NUM=${SLURM_NNODES:-1}
+export INDEX=${SLURM_PROCID:-0}
+export HOST_GPU_NUM=${SLURM_GPUS_ON_NODE:-2}
+export CHIEF_IP=$(scontrol show hostname $SLURM_NODELIST | head -n 1)
+
+# Debugging: Print values to verify they're set correctly
+echo "HOST_NUM: $HOST_NUM"
+echo "INDEX: $INDEX"
+echo "HOST_GPU_NUM: $HOST_GPU_NUM"
+echo "CHIEF_IP: $CHIEF_IP"
+
+# Set variables for the job
+CACHE_DIR="cache_dir"
+ANNOTATION="data/mdgs_gloss/annotation_train.json"
+EPOCHS=100
+BATCH_SIZE=25
+ACCUM_FREQ=50
+LR=1e-4
+NAME="bs50_ac_50_mdgs_gloss"
+RESUME="latest"
+TRAIN_NUM_SAMPLES=149894
+MODEL="ViT-L-14"
+TEXT_TYPE="polish_mplug"
+
+# Additional environment variables for torchrun
+export TORCH_DISTRIBUTED_DEBUG=DETAIL
+export HF_DATASETS_OFFLINE=0
+export TRANSFORMERS_OFFLINE=0
+export WANDB_API_KEY=b3a33bb694f0df2dfbd61a052b8e6d5aef47dba6
+
+./log_nvidia_smi.sh &
+
+# Run the training command
+apptainer exec langbind_cont.sif bash -c "
+    source /opt/conda/etc/profile.d/conda.sh
+    conda activate langbind
+
+    echo 'Running torchrun with the following args:'
+    echo '--train-data ${ANNOTATION} --train-num-samples ${TRAIN_NUM_SAMPLES}'
+    
+    TORCH_DISTRIBUTED_DEBUG=DETAIL HF_DATASETS_OFFLINE=0 TRANSFORMERS_OFFLINE=0 torchrun --nnodes=${HOST_NUM} --node_rank=${INDEX} --nproc_per_node=${HOST_GPU_NUM} --master_addr=${CHIEF_IP} \
+    -m main \
+    --train-data ${ANNOTATION} \
+    --train-num-samples ${TRAIN_NUM_SAMPLES} \
+    --lock-text \
+    --clip-type 'vl_new' --add-time-attn \
+    --text-type ${TEXT_TYPE} \
+    --init-temp 0.07 --learn-temp \
+    --model ${MODEL} --cache-dir ${CACHE_DIR} \
+    --lr ${LR} --coef-lr 1 \
+    --beta1 0.9 --beta2 0.98 --wd 0.2 --eps 1e-6 \
+    --num-frames 8 --tube-size 1 --force-patch-dropout 0.5 \
+    --epochs ${EPOCHS} --batch-size ${BATCH_SIZE} --accum-freq ${ACCUM_FREQ} --warmup 2000 \
+    --precision 'amp' --workers 1 --video-decode-backend 'decord' \
+    --save-frequency 1 --log-every-n-steps 20 --report-to 'wandb' \
+    --wandb-project-name 'signbind-de' \
+    --name ${NAME} \
+    --resume "latest" \
+    --do_train
+"
