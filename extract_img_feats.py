@@ -204,6 +204,6 @@ if __name__ == "__main__":
     extractor = FeatureExtractor(model, device, processor, save_dir=OUTPUT_BASE_DIR)
 
     # Process train, val, and test folders from the input directory, saving to output directory
-    for dataset_type in ["train", "val", "test"]:
+    for dataset_type in ["train", "dev", "test"]:
         print(f"Processing {dataset_type} dataset...")
         extractor.process_dataset(INPUT_BASE_DIR, dataset_type, segment_size=8, overlap=1)

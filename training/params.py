@@ -113,7 +113,7 @@ def parse_args(args):
 
     ################################
     # Loss function (semantic aware loss (loss.py, main.py (get_loss())))
-    parser.add_argument("--semantic_aware", default=False, action="store_true")
+    parser.add_argument("--semantic_loss", default=False, action="store_true")
 
 
 

@@ -14,6 +14,8 @@ dependencies:
   - xz
   - readline
   - tk
+  - sentencepiece
+  - tensorboard
   - pip:
       - accelerate==0.20.3
       - aiohttp==3.10.6
@@ -47,7 +49,7 @@ dependencies:
       - nvidia-cudnn-cu11==8.5.0.96
       - nvidia-cudnn-cu12==9.1.0.70
       - open-clip-torch==2.26.1
-      - opencv-python==4.7.0.72
+      - opencv-python-headless
       - packaging==24.1
       - pandas==2.2.3
       - peft==0.4.0
