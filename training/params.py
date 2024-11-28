@@ -111,6 +111,12 @@ def parse_args(args):
     
     parser.add_argument("--use_batched_dataset", default=False, action="store_true")
 
+    ################################
+    # Loss function (semantic aware loss (loss.py, main.py (get_loss())))
+    parser.add_argument("--semantic_aware", default=False, action="store_true")
+
+
+
     #######################
     # origin open-clip params
     parser.add_argument(

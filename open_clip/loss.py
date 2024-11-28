@@ -214,3 +214,69 @@ class DistillClipLoss(ClipLoss):
             return {"contrastive_loss": contrastive_loss, "distill_loss": distill_loss}
 
         return contrastive_loss, distill_loss
+    
+class SemanticAwareClipLoss(ClipLoss):
+    def __init__(
+            self,
+            lambda_param=0.5,
+            local_loss=False,
+            gather_with_grad=False,
+            cache_labels=False,
+            rank=0,
+            world_size=1,
+            use_horovod=False,
+    ):
+        super().__init__(
+            local_loss=local_loss,
+            gather_with_grad=gather_with_grad,
+            cache_labels=cache_labels,
+            rank=rank,
+            world_size=world_size,
+            use_horovod=use_horovod
+        )
+        self.lambda_param = lambda_param
+
+    def forward(self, image_features, text_features, logit_scale, output_dict=False):
+        device = image_features.device
+
+        # Compute logits
+        logits_per_image, logits_per_text = self.get_logits(image_features, text_features, logit_scale)
+        labels = self.get_ground_truth(device, logits_per_image.shape[0])
+
+        # Normalize features to unit vectors
+        image_features = image_features / image_features.norm(dim=1, keepdim=True)
+        text_features = text_features / text_features.norm(dim=1, keepdim=True)
+
+        # Compute visual similarity matrix V
+        V = torch.matmul(image_features, image_features.T)
+        V.fill_diagonal_(0)
+
+        # Compute semantic similarity matrix S
+        S = torch.matmul(text_features, text_features.T)
+        S.fill_diagonal_(1)
+
+        # Compute semantic dissimilarity matrix D
+        D = 1 - S  # Range [0, 2]
+        D = D / 2  # Normalize to [0, 1]
+
+        # Compute weight matrix W
+        W = V * D
+        if W.max() > 0:
+            W = W / W.max() * self.lambda_param
+        else:
+            W = W * self.lambda_param
+
+        # Create mask for negative samples
+        labels_expanded = labels.unsqueeze(1)
+        negative_mask = (labels_expanded != labels_expanded.T).float()
+
+        # Adjust logits
+        adjusted_logits_per_image = logits_per_image - W * negative_mask
+        adjusted_logits_per_text = logits_per_text - W.T * negative_mask
+
+        # Compute loss
+        loss_i = F.cross_entropy(adjusted_logits_per_image, labels)
+        loss_t = F.cross_entropy(adjusted_logits_per_text, labels)
+        total_loss = (loss_i + loss_t) / 2
+
+        return {"semantic_aware_loss": total_loss} if output_dict else total_loss

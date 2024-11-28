@@ -84,9 +84,6 @@ class PatchDropout(nn.Module):
             patch_indices_keep = rearrange(patch_indices_keep, 'b t n -> (b t) n')
 
 
-
-
-
         x = x[batch_indices, patch_indices_keep]
 
         if self.exclude_first_token:
