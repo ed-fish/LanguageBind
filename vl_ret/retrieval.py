@@ -220,7 +220,6 @@ def evaluate_vl_ret(model, data, epoch, args, tb_writer=None):
             tag=f"Text-Visual Embeddings at epoch {epoch}"
         )
 
-
         if args.save_logs:
             for name, val in tv_metrics.items():
                 if tb_writer is not None:

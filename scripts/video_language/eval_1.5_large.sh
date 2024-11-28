@@ -8,7 +8,7 @@ TORCH_DISTRIBUTED_DEBUG=DETAIL HF_DATASETS_OFFLINE=1 TRANSFORMERS_OFFLINE=1 torc
     -m main  \
     --train-data ${ANNOTATION} \
 	--train-num-samples 49016 \
-    --clip-type "vl_new" --add-time-attn \
+    --clip-type "vl_new" --add-time-attn --semantic_loss \
     --lock-text --text-type "polish_mplug" \
     --init-temp 0.07 --learn-temp \
     --model "ViT-L-14" --cache-dir ${CACHE_DIR} \

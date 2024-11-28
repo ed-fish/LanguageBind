@@ -11,12 +11,12 @@ with open(json_file, 'r') as f:
 video_directory = '/vol/vssp/datasets/mixedmode/BOBSL/bobsl-v1-release/MASKED_VIDEOS_BIGGEST'  # Update if necessary
 
 # Define the output directory where clips will be saved
-output_directory = '/mnt/4tb/data/bobslspot_mask'  # Update if necessary
+output_directory = '/mnt/4tb/data/bobslspot_mask_test'  # Update if necessary
 os.makedirs(output_directory, exist_ok=True)
 
 # Extract data from the JSON structure
 # Iterate over the keys: 'train', 'public_test', and 'val'
-for split in ['train', 'public_test', 'val']:
+for split in ['public_test']:
     for word in data[split].keys():
         # Extract relevant data for the current sample
         file_path = data[split][word]
@@ -27,7 +27,7 @@ for split in ['train', 'public_test', 'val']:
         # Iterate over each mouthing time for this video
         for idx, time in enumerate(global_times):
             vid_path = files[idx]  # Use the video name directly as ID
-            if probs[idx] < 0.9:
+            if probs[idx] < 0.8:
                 continue
 
             if time is None:
