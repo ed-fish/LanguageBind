@@ -86,6 +86,7 @@ def get_latest_checkpoint(path: str, remote: bool):
 def SET_GLOBAL_VALUE(k, v):
     set_global_value(k, v)
 
+
 def main(args):
     args = parse_args(args)
 

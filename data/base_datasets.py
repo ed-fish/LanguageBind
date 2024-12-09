@@ -11,7 +11,7 @@ import json
 import decord
 
 class VAT_dataset(Dataset):
-    def __init__(self, args):
+    def __init__(self, args, translation_tokenizer=None):
         super().__init__()
         self.video_decode_backend = args.video_decode_backend
         self.num_frames = args.num_frames
@@ -24,6 +24,14 @@ class VAT_dataset(Dataset):
         self.weight = [0.2, 0.2, 0.2, 0.2] + [0.2 / 8] * 8
         self.title = self.text_type == 'raw'
         self.data_root = ''
+        if translation_tokenizer:
+            print("using translationtokenizerrr")
+            print("type of translation_tokenizer:", type(translation_tokenizer))
+            self.translate = True
+            self.tokenizer = translation_tokenizer
+        else:
+            self.tokenizer = get_tokenizer(HF_HUB_PREFIX + self.model, cache_dir=self.cache_dir)
+            
         if args.clip_type != 'al':
             with open(self.train_data, 'r') as f:
                 self.id2title_folder_caps = json.load(f)
@@ -33,7 +41,6 @@ class VAT_dataset(Dataset):
 
         self.clip_type = args.clip_type
 
-        self.tokenizer = get_tokenizer(HF_HUB_PREFIX + self.model, cache_dir=self.cache_dir)
         self.video_transform = get_video_transform(args)
 
     def __len__(self):
@@ -75,6 +82,7 @@ class VAT_dataset(Dataset):
                 text = self.id2title_folder_caps[id]['ofa'][ofa_number]
             else:
                 text = self.id2title_folder_caps[id][text_type]
+
             text_output = load_and_transform_text(text, self.tokenizer, title=text_type=='raw')
             return text_output, ofa_number
 
@@ -113,8 +121,8 @@ class VATBatchedDataset(Dataset):
         self.base_dataset = base_dataset
         self.chunk_size = chunk_size
         self.stride = stride
-        self.ids = self.base_dataset.ids
-
+        self.ids = base_dataset.ids
+        
     def __len__(self):
         return len(self.base_dataset)
 

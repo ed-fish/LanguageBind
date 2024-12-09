@@ -59,8 +59,8 @@ def get_VAT_dataset(args):
 
 
 
-def get_VAT_batched_dataset(args, chunk_size=8, stride=4):
-    base_dataset = VAT_dataset(args)
+def get_VAT_batched_dataset(args, translation_tokenizer, chunk_size=8, stride=4):
+    base_dataset = VAT_dataset(args, translation_tokenizer)
     dataset = VATBatchedDataset(base_dataset, chunk_size=chunk_size, stride=stride)
     num_samples = len(dataset)
     sampler = DistributedSampler(dataset) if args.distributed else None
@@ -174,13 +174,13 @@ def collate_fn(batch):
     }
 
 
-def get_data(args, epoch=0):
+def get_data(args, epoch=0, translation_tokenizer=None):
     data = {}
     if args.do_train:
         print(args.train_data)
         if args.train_data.endswith(".json"):
             if args.use_batched_dataset:
-                data[f"{args.clip_type}_pt"] = get_VAT_batched_dataset(args)
+                data[f"{args.clip_type}_pt"] = get_VAT_batched_dataset(args, translation_tokenizer)
             else:
                 data[f"{args.clip_type}_pt"] = get_VAT_dataset(args)
         elif args.train_data.endswith(".tar"):

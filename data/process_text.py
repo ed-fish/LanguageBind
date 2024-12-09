@@ -185,17 +185,23 @@ def clean_youtube(text, is_tags=False):
     return text
 
 def load_and_transform_text(text, tokenizer, title=True):
-    if title:
-        title_hashtags = text.split('#')
-        title, hashtags = title_hashtags[0], '#' + '#'.join(title_hashtags[1:])
-        title = clean_youtube(title)
-        hashtags = clean_youtube(hashtags, is_tags=True)
-        text = title + ', ' + hashtags
-    if text == '' or text.isspace():
-        raise ValueError('text is empty')
-    input_ids, attention_mask = tokenizer(text)
+    encoding = tokenizer(text, truncation=True, padding='max_length', max_length=77, return_tensors='pt')
+    # print("DEBUG tokenization:", encoding)
+    # encoding should be a dictionary with 'input_ids' and 'attention_mask' as tensors.
+    input_ids, attention_mask = encoding['input_ids'], encoding['attention_mask']
+    # print("DEBUG tokenized input_ids shape:", input_ids.shape)
     return {'input_ids': input_ids.squeeze(), 'attention_mask': attention_mask.squeeze()}
 
+    # if title:
+    #     title_hashtags = text.split('#')
+    #     title, hashtags = title_hashtags[0], '#' + '#'.join(title_hashtags[1:])
+    #     title = clean_youtube(title)
+    #     hashtags = clean_youtube(hashtags, is_tags=True)
+    #     text = title + ', ' + hashtags
+    # if text == '' or text.isspace():
+    #     raise ValueError('text is empty')
+    # input_ids, attention_mask = tokenizer(text)
+    # return {'input_ids': input_ids.squeeze(), 'attention_mask': attention_mask.squeeze()}
 
 
 if __name__ == '__main__':

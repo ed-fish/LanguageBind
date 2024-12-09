@@ -6,13 +6,11 @@ import torch
 from torch import nn
 from transformers import AutoConfig, CLIPPreTrainedModel
 
-
 from model.base_model import CLIPModel
 from model.process_clip import add_time_attn_block, convert_model_to_lora, set_global_value, resize_pos
 from open_clip import convert_weights_to_lp
 from open_clip.transformer import PatchDropout
 from training.distributed import is_master
-
 
 def SET_GLOBAL_VALUE(k, v):
     set_global_value(k, v)
