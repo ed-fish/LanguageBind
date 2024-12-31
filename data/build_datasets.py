@@ -86,44 +86,6 @@ import torch
 from torch.utils.data import Dataset
 import math
 
-class VATChunksDataset(Dataset):
-    """
-    A dataset wrapper that splits each video into multiple overlapping chunks.
-    Each chunk consists of `chunk_size` frames with a sliding window of `stride` frames.
-    """
-
-    def __init__(self, base_dataset, chunk_size=8, stride=4):
-        """
-        Args:
-            base_dataset (Dataset): The original VAT_dataset instance.
-            chunk_size (int): Number of frames per chunk.
-            stride (int): Number of frames to slide the window for the next chunk.
-        """
-        self.base_dataset = base_dataset
-        self.chunk_size = chunk_size
-        self.stride = stride
-
-        # Precompute the total number of chunks across all videos
-        self.chunk_offsets = []  # List of tuples: (video_idx, start_frame_idx)
-        for video_idx in range(len(self.base_dataset)):
-            num_frames = self.base_dataset.get_num_frames(video_idx)
-            if num_frames < self.chunk_size:
-                # Optionally, handle videos with fewer frames
-                # For simplicity, we'll skip them
-                continue
-            num_chunks = 1 + (num_frames - self.chunk_size) // self.stride
-            for chunk_idx in range(num_chunks):
-                start_frame = chunk_idx * self.stride
-                self.chunk_offsets.append((video_idx, start_frame))
-
-    def __len__(self):
-        return len(self.chunk_offsets)
-
-    def __getitem__(self, idx):
-        video_idx, start_frame = self.chunk_offsets[idx]
-        frames, label = self.base_dataset.get_video_frames(video_idx, start_frame, self.chunk_size)
-        return frames, label
-    
 def collate_fn(batch):
     # Filter out None values
     batch = [x for x in batch if x is not None]
@@ -187,10 +149,20 @@ def get_data(args, epoch=0, translation_tokenizer=None):
             data[f"{args.clip_type}_pt"] = get_wds_dataset(args, is_train=True, epoch=epoch)
         else:
             raise NameError
-
-    if args.do_eval:
-        temp_batch_size = args.batch_size
-        args.batch_size = 8 if args.val_vl_ret_data else 16
+        
+    if args.do_eval and args.val_data:
+        print(args.val_data)
+        if args.val_data.endswith(".json"):
+            if args.use_batched_dataset:
+                data[f"{args.clip_type}_pt"] = get_VAT_batched_dataset(args, translation_tokenizer)
+            else:
+                data[f"{args.clip_type}_pt"] = get_VAT_dataset(args)
+        elif args.val_data.endswith(".tar"):
+            data[f"{args.clip_type}_pt"] = get_wds_dataset(args, is_train=True, epoch=epoch)
+        else:
+            raise NameError
+            
+    if args.do_eval and args.val_data:
         data_root = "/mnt/fast/nobackup/scratch4weeks/ef0036/"
         if args.val_vl_ret_data:
             data["vl_ret"] = []
@@ -370,7 +342,7 @@ def get_data(args, epoch=0, translation_tokenizer=None):
                 data['t_cls'].append({val_t_cls_data: get_thermal_dataset(args)})
             args.val_t_cls_data = temp_val_t_cls_data
 
-        args.batch_size = temp_batch_size
+        # args.batch_size = temp_batch_size
 
     return data
 

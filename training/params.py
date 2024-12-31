@@ -111,6 +111,9 @@ def parse_args(args):
     
     parser.add_argument("--use_batched_dataset", default=False, action="store_true")
     parser.add_argument("--translation_tokenizer", default="pretrain_models/mytran", type=str, help="tokenizer for text")
+    
+    parser.add_argument("--output-file", default="logs/text_output.txt", type=str, help="translation output")
+    parser.add_argument("--resume-translation", default=None, type=str, help="continue training translation model")
 
     ################################
     # Loss function (semantic aware loss (loss.py, main.py (get_loss())))

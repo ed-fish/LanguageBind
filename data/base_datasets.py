@@ -17,6 +17,7 @@ class VAT_dataset(Dataset):
         self.num_frames = args.num_frames
         self.text_type = args.text_type
         self.train_data = args.train_data
+        self.val_data = args.val_data
         self.train_num_samples = args.train_num_samples
         self.model = args.model
         self.cache_dir = args.cache_dir
@@ -25,19 +26,20 @@ class VAT_dataset(Dataset):
         self.title = self.text_type == 'raw'
         self.data_root = ''
         if translation_tokenizer:
-            print("using translationtokenizerrr")
             print("type of translation_tokenizer:", type(translation_tokenizer))
             self.translate = True
             self.tokenizer = translation_tokenizer
         else:
             self.tokenizer = get_tokenizer(HF_HUB_PREFIX + self.model, cache_dir=self.cache_dir)
             
-        if args.clip_type != 'al':
+        if args.do_train:
             with open(self.train_data, 'r') as f:
                 self.id2title_folder_caps = json.load(f)
-            self.ids = list(self.id2title_folder_caps.keys())[:self.train_num_samples]
-        else:
-            self.id2path_cap, self.ids = get_audio_anno()
+        if args.do_eval:
+            with open(self.val_data, 'r') as f:
+                self.id2title_folder_caps = json.load(f)
+            
+        self.ids = list(self.id2title_folder_caps.keys())[:self.train_num_samples]
 
         self.clip_type = args.clip_type
 

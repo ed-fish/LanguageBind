@@ -9,18 +9,17 @@ from decord import VideoReader, cpu
 from data.process_text import load_and_transform_text
 from data.process_video import get_video_transform
 import os
+import torch.nn.functional as F  # Corrected import
 import glob
 import re
 import sys
 import numpy as np
-import io
-from PIL import Image
-from torchvision.transforms import ToTensor
 
-LATEST_CHECKPOINT_NAME = "epoch_latest.pt"
+# Model and checkpoint configurations
 MODEL_DICT = {
     "ViT-L-14": "laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K",
-    "ViT-H-14": "laion/CLIP-ViT-H-14-laion2B-s32B-b79K"
+    "ViT-H-14": "laion/CLIP-ViT-H-14-laion2B-s32B-b79K",
+    "VIT-VL-14": "models--LanguageBind--LanguageBind_Video_FT/snapshots/13f52c20ce666a7d017bcd00522039f4ab034a66/pytorch_model.bin"
 }
 
 CHECKPOINT_DICT = {
@@ -47,26 +46,27 @@ def load_model(args):
     checkpoint_path = CHECKPOINT_DICT.get(args.model)
     if not model_name or not checkpoint_path:
         raise ValueError(f"Model or checkpoint path for {args.model} not found.")
-    
+
     # Assign model name and create the model
     args.model = model_name
     model = create_vat_model(args)
-    
+
     # Load pre-trained CLIP weights
     if args.pretrained:
         pretrained_path = os.path.join(args.cache_dir, checkpoint_path)
         if not os.path.isfile(pretrained_path):
             raise FileNotFoundError(f"CLIP weights not found at {pretrained_path}")
-        
+
         clip_weights = torch.load(pretrained_path, map_location='cpu')
         model.load_state_dict(clip_weights['state_dict'], strict=True)
         print("Loaded CLIP pre-trained weights.")
-    
+
     # Resolve resume path for custom checkpoint
     resume_from = None
     if args.resume:
         if args.resume == "latest":
-            checkpoint_dir = "/mnt/fast/nobackup/users/ef0036/LanguageBind/logs/bs50_ac_50_mdgs_gloss/checkpoints"
+            # Specify your checkpoint directory here
+            checkpoint_dir = "/path/to/your/checkpoints/"
             if is_master(args):
                 resume_from = get_latest_checkpoint(checkpoint_dir)
             if args.distributed:
@@ -85,69 +85,70 @@ def load_model(args):
         print(f"Loaded custom checkpoint with missing keys: {missing_keys}, unexpected keys: {unexpected_keys}")
     else:
         print("No checkpoint loaded for resuming.")
-    
+
     model.to(device)
     model.eval()
 
     return model, device
 
-# Use Decode class to handle video and text transformation
 class InferenceProcessor:
     def __init__(self, args):
-        # Initialize the tokenizer and transformations from loadVAT
         self.tokenizer = get_tokenizer(HF_HUB_PREFIX + args.model, cache_dir=args.cache_dir)
         self.video_transform = get_video_transform(args)
-    
+
     def load_video(self, video_path, num_frames=8):
-        """Load and preprocess a video using Decord and video transform pipeline."""
         vr = VideoReader(video_path, ctx=cpu(0))
         frame_id_list = np.linspace(0, len(vr) - 1, num_frames, dtype=int)
         video_data = vr.get_batch(frame_id_list)
-        video_data = video_data.permute(3, 0, 1, 2)  # Rearrange to (C, T, H, W)
+        video_data = video_data.permute(3, 0, 1, 2)
         return self.video_transform(video_data)
 
     def tokenize_text(self, text):
-        """Tokenize and preprocess text as in loadVAT."""
         tokens = load_and_transform_text(text, self.tokenizer)
         return tokens['input_ids'], tokens['attention_mask']
 
 if __name__ == "__main__":
     args = parse_args(sys.argv[1:])
     model, device = load_model(args)
-    
-    # Initialize InferenceProcessor for consistent preprocessing
     processor = InferenceProcessor(args)
 
-    # Example inputs
-    # video_paths = ['/mnt/fast/nobackup/scratch4weeks/ef0036/bsldict/videos_original/d_010_079_000_do-you-use-bsl.mp4', '/mnt/fast/nobackup/scratch4weeks/ef0036/bsldict/videos_original/c_010_033_000_clown.mp4', '/mnt/fast/nobackup/scratch4weeks/ef0036/bsldict/videos_original/s_013_017_007_son.mp4', '/mnt/fast/nobackup/scratch4weeks/ef0036/bsldict/videos_original/b_010_045_005_brother.mp4', '/mnt/fast/nobackup/scratch4weeks/ef0036/bsldict/videos_original/r_001_036_002_railroad-train.mp4']
-    # language_texts = ['do you use bsl?', 'clown', 'son', 'brother', 'train']
-    video_paths = ['/mnt/fast/nobackup/scratch4weeks/ef0036/mdgs_gloss/1583882A-2_gloss_1_BUCHSTABE1.mp4', '/mnt/fast/nobackup/scratch4weeks/ef0036/mdgs_gloss/1583882A-3_gloss_1_DAZU1.mp4', '/mnt/fast/nobackup/scratch4weeks/ef0036/mdgs_gloss/1583882A-4_gloss_5_NUM-EINER1A:2d.mp4']
-    language_texts = ['buchtabe', 'dazu', 'einer', 'one']
+    # Example video paths and corresponding texts
+    video_paths = ['data/rachel/BROTHER.mp4', 'data/rachel/PAPER.mp4', 'data/rachel/SISTER.mp4']
+    language_texts = ['brother', 'paper', 'sister']
 
-    # Load and transform videos
+    # Load and preprocess videos
     video_inputs = [processor.load_video(vp).unsqueeze(0) for vp in video_paths]
-    video_inputs = torch.cat(video_inputs, dim=0).to(device)  # Stack video inputs
+    video_inputs = torch.cat(video_inputs, dim=0).to(device)
 
-    # Tokenize language inputs
+    # Tokenize text inputs
     input_ids_list, attention_masks_list = zip(*[processor.tokenize_text(text) for text in language_texts])
     input_ids = torch.stack(input_ids_list).to(device)
     attention_masks = torch.stack(attention_masks_list).to(device)
 
-    # Prepare inputs for model inference
-    inputs = {
-        'video': video_inputs,
-        'language': input_ids,
-        'attention_mask': attention_masks
-    }
-    
     # Run inference
     with torch.no_grad():
         embeddings = model(video_inputs, input_ids, attention_masks)
-         
-        
-    # Calculate similarities between video and text embeddings
-    
-    video_text_similarity = embeddings['image_features'] @ embeddings['text_features'].T
-    
-    # video_text_similarity = torch.softmax(embeddings['image_features'] @ embeddings['text_features'].T, dim=-1)
-    print("Video x Text Similarity: \n", video_text_similarity.cpu().numpy())
+
+        # Retrieve embeddings and normalize
+        image_features = embeddings['image_features']
+        text_features = embeddings['text_features']
+
+        image_features_norm = F.normalize(image_features, dim=1)
+        text_features_norm = F.normalize(text_features, dim=1)
+
+        # Compute similarities using normalized features
+        video_text_similarity = image_features_norm @ text_features_norm.T
+        video_video_similarity = image_features_norm @ image_features_norm.T
+
+        # Print similarities between each video and text
+        for i, img_feat in enumerate(image_features_norm):
+            for j, txt_feat in enumerate(text_features_norm):
+                similarity = (img_feat @ txt_feat.T).item()
+                print(f"{video_paths[i]} x {language_texts[j]}: {similarity:.4f}")
+
+        # Optionally, you can print the similarity matrices
+        print("\nVideo x Text Similarity Matrix:")
+        print(video_text_similarity.cpu().numpy())
+
+        print("\nVideo x Video Similarity Matrix:")
+        print(video_video_similarity.cpu().numpy())

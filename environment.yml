@@ -17,6 +17,7 @@ dependencies:
   - sentencepiece
   - tensorboard
   - pip:
+      - hf-trim
       - accelerate==0.20.3
       - aiohttp==3.10.6
       - attrs==24.2.0
